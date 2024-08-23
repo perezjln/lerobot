@@ -29,7 +29,7 @@ if __name__ == "__main__":
                         help="Path to the file containing the list of datasets")
     parser.add_argument("--dataset_name", type=str, default=None,
                         help="Name of the dataset if it is unique")
-    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="act",
+    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="diffusion",
                         help="Type of policy to train: diffusion or act")
     args = parser.parse_args()
 
@@ -45,17 +45,21 @@ if __name__ == "__main__":
 
     # Set up the dataset.
     delta_timestamps = {
+
         # Load the previous image and state at -0.1 seconds before current frame,
         # then load current image and state corresponding to 0.0 second.
-        "observation.image": [-0.1, 0.0],
+        "observation.images.laptop": [-0.1, 0.0],
+        "observation.images.phone": [-0.1, 0.0],
         "observation.state": [-0.1, 0.0],
+
         # Load the previous action (-0.1), the next action to be executed (0.0),
         # and 14 future actions with a 0.1 seconds spacing. All these actions will be
         # used to supervise the policy.
         "action": [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4],
     }
+
     if args.dataset_name is not None:
-        dataset = LeRobotDataset(args.dataset_name , delta_timestamps=delta_timestamps)
+        dataset = LeRobotDataset(args.dataset_name, delta_timestamps=delta_timestamps)
     else:
         with open(args.dataset_list, "r") as f:
             dataset_names = f.read().splitlines()
@@ -67,12 +71,27 @@ if __name__ == "__main__":
     # Policies are initialized with a configuration class, in this case `DiffusionConfig`.
     # For this example, no arguments need to be passed because the defaults are set up for PushT.
     # If you're doing something different, you will likely need to change at least some of the defaults.
-    
+
+    input_shapes={"observation.images.laptop": dataset[0]["observation.images.laptop"].shape,
+                  "observation.images.phone": dataset[0]["observation.images.phone"].shape,
+                  "observation.state": dataset[0]["observation.state"].shape}
+
+    output_shapes={"action":dataset[0]["action"].shape}
+
     if args.policy_type == "act":
-        cfg = ACTConfig()
+
+        cfg = ACTConfig(input_shapes=input_shapes,
+                        output_shapes=output_shapes,                        
+                        input_normalization_modes={},
+                        output_normalization_modes={})
         policy = ACTPolicy(cfg, dataset_stats=dataset.stats)
+
     else:
-        cfg = DiffusionConfig()
+
+        cfg = DiffusionConfig(input_shapes=input_shapes,
+                                output_shapes=output_shapes,                        
+                                input_normalization_modes={},
+                                output_normalization_modes={})
         policy = DiffusionPolicy(cfg, dataset_stats=dataset.stats)
         
     policy.train()
@@ -83,7 +102,7 @@ if __name__ == "__main__":
     # Create dataloader for offline training.
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        num_workers=4,
+        num_workers=0,
         batch_size=64,
         shuffle=True,
         pin_memory=device != torch.device("cpu"),
