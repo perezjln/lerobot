@@ -19,7 +19,7 @@ from lerobot.common.policies.act.configuration_act import ACTConfig
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Train Policy on multiple datasets")
-    parser.add_argument("--output_dir", type=str, default="outputs/train/phantom",
+    parser.add_argument("--output_dir", type=str, default="outputs/train",
                         help="Directory to store the training checkpoint")
     parser.add_argument("--steps", type=int, default=5000,
                         help="Number of offline training steps")
@@ -29,7 +29,7 @@ if __name__ == "__main__":
                         help="Path to the file containing the list of datasets")
     parser.add_argument("--dataset_name", type=str, default=None,
                         help="Name of the dataset if it is unique")
-    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="diffusion",
+    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="act",
                         help="Type of policy to train: diffusion or act")
     args = parser.parse_args()
 
@@ -60,6 +60,8 @@ if __name__ == "__main__":
         with open(args.dataset_list, "r") as f:
             dataset_names = f.read().splitlines()
         dataset = MultiLeRobotDataset(dataset_names, delta_timestamps=delta_timestamps)
+
+    print(dataset.info)
 
     # Set up the the policy.
     # Policies are initialized with a configuration class, in this case `DiffusionConfig`.
