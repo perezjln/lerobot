@@ -25,7 +25,7 @@ if __name__ == "__main__":
                         help="Number of offline training steps")
     parser.add_argument("--log_freq", type=int, default=250,
                         help="Frequency of logging training progress")
-    parser.add_argument("--dataset_list", type=str, default="dataset_list.txt",
+    parser.add_argument("--dataset_list", type=str, default="dataset_list_small.txt",
                         help="Path to the file containing the list of datasets")
     parser.add_argument("--dataset_name", type=str, default=None,
                         help="Name of the dataset if it is unique")
