@@ -17,8 +17,8 @@ if __name__ == "__main__":
 
         # Load the previous image and state at -0.1 seconds before current frame,
         # then load current image and state corresponding to 0.0 second.
-        "observation.images.laptop": [-0.1, 0.0],
-        "observation.images.phone": [-0.1, 0.0],
+        "observation.images.elp0": [-0.1, 0.0],
+        "observation.images.elp1": [-0.1, 0.0],
         "observation.state": [-0.1, 0.0],
 
         # Load the previous action (-0.1), the next action to be executed (0.0),
@@ -26,7 +26,8 @@ if __name__ == "__main__":
         # used to supervise the policy.
         "action": [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4],
     }
-    dataset_koch = LeRobotDataset("cadene/eval_2024_07_30_0100_act_koch_pick_place_1_lego_100000", delta_timestamps=delta_timestamps_koch)
+    dataset_koch = LeRobotDataset("jackvial/koch_pick_and_place_pistachio_11_e20", delta_timestamps=delta_timestamps_koch)
+    print(dataset_koch.hf_dataset.features.keys())
 
     # Set up the dataset.
     delta_timestamps_pusht = {
@@ -48,8 +49,8 @@ if __name__ == "__main__":
 
     print(" --- ")
     print("keys: ", dataset_koch[0].keys())
-    print("observation.images.phone: ",  dataset_koch[0]["observation.images.phone"].shape)
-    print("observation.images.laptop: ", dataset_koch[0]["observation.images.laptop"].shape)
+    print("observation.images.elp0: ",  dataset_koch[0]["observation.images.elp0"].shape)
+    print("observation.images.elp1: ", dataset_koch[0]["observation.images.elp1"].shape)
     print("observation.state: ", dataset_koch[0]["observation.state"].shape)
     print("action: ", dataset_koch[0]["action"].shape)
 
@@ -69,13 +70,13 @@ if __name__ == "__main__":
 
     ## Instantiate the models for koch datasets
     print(" Instantiate the models for koch datasets")
-    cfg_koch = DiffusionConfig(input_normalization_modes={"observation.images.laptop": "mean_std",
-                                                          "observation.images.phone": "mean_std",
+    cfg_koch = DiffusionConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
+                                                          "observation.images.elp1": "mean_std",
                                                           "observation.state": "mean_std"},
                                output_normalization_modes={"action": "mean_std"},
                                crop_shape=None,
-                               input_shapes={"observation.images.laptop": dataset_koch[0]["observation.images.laptop"].shape[1:],
-                                             "observation.images.phone": dataset_koch[0]["observation.images.phone"].shape[1:],
+                               input_shapes={"observation.images.elp0": dataset_koch[0]["observation.images.elp0"].shape[1:],
+                                             "observation.images.elp1": dataset_koch[0]["observation.images.elp1"].shape[1:],
                                              "observation.state": dataset_koch[0]["observation.state"].shape[1:]},
                                 output_shapes={"action": dataset_koch[0]["action"].shape})
 
