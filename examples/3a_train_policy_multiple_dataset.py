@@ -21,7 +21,7 @@ import tqdm
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Train Policy on multiple datasets")
-    parser.add_argument("--output_dir", type=str, default="outputs-pistachio/train",
+    parser.add_argument("--output_dir", type=str, default="outputs/train",
                         help="Directory to store the training checkpoint")
     parser.add_argument("--steps", type=int, default=80000,
                         help="Number of offline training steps")
@@ -31,7 +31,7 @@ if __name__ == "__main__":
                         help="Path to the file containing the list of datasets")
     parser.add_argument("--dataset_name", type=str, default=None,
                         help="Name of the dataset if it is unique")
-    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="diffusion",
+    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="act",
                         help="Type of policy to train: diffusion or act")
     args = parser.parse_args()
 
@@ -88,7 +88,6 @@ if __name__ == "__main__":
                                                           "observation.images.elp1": "mean_std",
                                                           "observation.state": "mean_std"},
                                output_normalization_modes={"action": "mean_std"},
-                               crop_shape=None,
                                input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
                                              "observation.images.elp1": dataset[0]["observation.images.elp1"].shape[1:],
                                              "observation.state": dataset[0]["observation.state"].shape[1:]},
@@ -151,6 +150,6 @@ if __name__ == "__main__":
                 done = True
                 break
 
-            # Save a policy checkpoint.
-            # One can also push the policy into the hub.
-            policy.save_pretrained(output_directory)
+        # Save a policy checkpoint.
+        # One can also push the policy into the hub.
+        policy.save_pretrained(output_directory, repo_id=f"{args.policy_type}-pistachio")
