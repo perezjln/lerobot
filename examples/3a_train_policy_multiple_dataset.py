@@ -15,13 +15,15 @@ from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
 from lerobot.common.policies.act.modeling_act import ACTPolicy
 from lerobot.common.policies.act.configuration_act import ACTConfig
 
+import tqdm
+
 
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Train Policy on multiple datasets")
-    parser.add_argument("--output_dir", type=str, default="outputs/train",
+    parser.add_argument("--output_dir", type=str, default="outputs-pistachio/train",
                         help="Directory to store the training checkpoint")
-    parser.add_argument("--steps", type=int, default=5000,
+    parser.add_argument("--steps", type=int, default=80000,
                         help="Number of offline training steps")
     parser.add_argument("--log_freq", type=int, default=250,
                         help="Frequency of logging training progress")
@@ -60,10 +62,10 @@ if __name__ == "__main__":
     #dataset_koch = LeRobotDataset("jackvial/koch_pick_and_place_pistachio_11_e20", delta_timestamps=delta_timestamps_koch)
     #print(dataset_koch.hf_dataset.features.keys())
     dataset = MultiLeRobotDataset(["jackvial/koch_pick_and_place_pistachio_11_e20", 
-                                        "jackvial/koch_pick_and_place_pistachio_10_e20", 
-                                        "jackvial/koch_pick_and_place_pistachio_8_e100", 
-                                        "jackvial/koch_pick_and_place_pistachio_5_e3"], 
-                                        delta_timestamps=delta_timestamps_koch)
+                                    "jackvial/koch_pick_and_place_pistachio_10_e20", 
+                                    "jackvial/koch_pick_and_place_pistachio_8_e100", 
+                                    "jackvial/koch_pick_and_place_pistachio_5_e3"], 
+                                    delta_timestamps=delta_timestamps_koch)
 
     """
     if args.dataset_name is not None:
@@ -123,14 +125,22 @@ if __name__ == "__main__":
 
     # Run training loop.
     step = 0
+    grad_clip_norm = 10.0
     done = False
     while not done:
-        for batch in dataloader:
+        for batch in tqdm.tqdm(dataloader, desc="Training", unit="batch"):
             
             batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
             output_dict = policy.forward(batch)
             loss = output_dict["loss"]
             loss.backward()
+
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                    policy.parameters(),
+                    grad_clip_norm,
+                    error_if_nonfinite=False,
+            )
+
             optimizer.step()
             optimizer.zero_grad()
 
@@ -141,5 +151,6 @@ if __name__ == "__main__":
                 done = True
                 break
 
-    # Save a policy checkpoint.
-    policy.save_pretrained(output_directory)
+            # Save a policy checkpoint.
+            # One can also push the policy into the hub.
+            policy.save_pretrained(output_directory)
