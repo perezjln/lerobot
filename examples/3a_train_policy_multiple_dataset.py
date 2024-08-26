@@ -31,7 +31,7 @@ if __name__ == "__main__":
                         help="Path to the file containing the list of datasets")
     parser.add_argument("--dataset_name", type=str, default=None,
                         help="Name of the dataset if it is unique")
-    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="act",
+    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="diffusion",
                         help="Type of policy to train: diffusion or act")
     args = parser.parse_args()
 
@@ -86,12 +86,15 @@ if __name__ == "__main__":
         cfg = ACTConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
                                                     "observation.images.elp1": "mean_std",
                                                     "observation.state": "mean_std"},
-                               output_normalization_modes={"action": "mean_std"},
-                               input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
-                                             "observation.images.elp1": dataset[0]["observation.images.elp1"].shape[1:],
-                                             "observation.state": dataset[0]["observation.state"].shape[1:]},
-                                output_shapes={"action": dataset[0]["action"].shape[1:]})
+                                output_normalization_modes={"action": "mean_std"},
+                                #crop_shape=None,
+                                input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
+                                                "observation.images.elp1": dataset[0]["observation.images.elp1"].shape[1:],
+                                                "observation.state": dataset[0]["observation.state"].shape[1:]},
+                                    output_shapes={"action": dataset[0]["action"].shape[1:]})
+
         policy = ACTPolicy(cfg, dataset_stats=dataset.stats)
+
 
     else:
 

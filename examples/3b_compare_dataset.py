@@ -9,6 +9,8 @@ import tqdm
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset, MultiLeRobotDataset
 from lerobot.common.policies.diffusion.configuration_diffusion import DiffusionConfig
 from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
+from lerobot.common.policies.act.modeling_act import ACTPolicy
+from lerobot.common.policies.act.configuration_act import ACTConfig
 
 if __name__ == "__main__":
 
@@ -30,8 +32,7 @@ if __name__ == "__main__":
     #print(dataset_koch.hf_dataset.features.keys())
     dataset_koch = MultiLeRobotDataset(["jackvial/koch_pick_and_place_pistachio_11_e20", 
                                         "jackvial/koch_pick_and_place_pistachio_10_e20", 
-                                        "jackvial/koch_pick_and_place_pistachio_8_e100", 
-                                        "jackvial/koch_pick_and_place_pistachio_5_e3"], 
+                                        "jackvial/koch_pick_and_place_pistachio_8_e100"], 
                                         delta_timestamps=delta_timestamps_koch)
 
     # Set up the dataset.
@@ -62,22 +63,26 @@ if __name__ == "__main__":
     print(" --- ")
     print("keys: ", dataset_pusht[0].keys())
     print("observation.image: ", dataset_pusht[0]["observation.image"].shape)
-    print("action: ", dataset_pusht[0]["action"].shape[1:])
+    print("action: ", dataset_pusht[0]["action"].shape)
 
 
     ## Instantiate the models for pushT datasets
     print(" Instantiate the models for pushT datasets")
-    cfg_pusht = DiffusionConfig(input_shapes={"observation.image": dataset_pusht[0]["observation.image"].shape[1:],
-                                             "observation.state": dataset_pusht[0]["observation.state"].shape[1:]},
-                                output_shapes={"action": dataset_pusht[0]["action"].shape[1:]},
-                                crop_shape=None)
+    cfg_pusht = DiffusionConfig(input_normalization_modes={"observation.image": "mean_std",
+                                                     "observation.state": "mean_std"},
+                            output_normalization_modes={"action": "mean_std"},
+                            input_shapes={"observation.image": dataset_pusht[0]["observation.image"].shape[1:],
+                                          "observation.state": dataset_pusht[0]["observation.state"].shape[1:]},
+                            output_shapes={"action": dataset_pusht[0]["action"].shape[1:]})
+                                #crop_shape=None)
     policy_pusht = DiffusionPolicy(cfg_pusht, dataset_stats=dataset_pusht.stats)
+
 
     ## Instantiate the models for koch datasets
     print(" Instantiate the models for koch datasets")
     cfg_koch = DiffusionConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
-                                                          "observation.images.elp1": "mean_std",
-                                                          "observation.state": "mean_std"},
+                                                    "observation.images.elp1": "mean_std",
+                                                    "observation.state": "mean_std"},
                                output_normalization_modes={"action": "mean_std"},
                                crop_shape=None,
                                input_shapes={"observation.images.elp0": dataset_koch[0]["observation.images.elp0"].shape[1:],
@@ -92,7 +97,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
 
-    # Create dataloader for offline training.
+    #### Create dataloader for offline training.
     dataloader = torch.utils.data.DataLoader(
         dataset_koch,
         num_workers=0,
@@ -102,16 +107,17 @@ if __name__ == "__main__":
         drop_last=True,
     )
 
-    ## Forward the pushT dataset
+    # Forward the koch dataset
     policy_koch.train()
-    policy_koch.to(device)    
-    for batch in tqdm.tqdm(dataloader, desc="Training"):            
+    policy_koch.to(device)   
+     
+    for batch in tqdm.tqdm(dataloader, desc="Training koch"):            
         batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
         output_dict = policy_koch.forward(batch)
         loss = output_dict["loss"]
 
 
-    # Create dataloader for offline training.
+    #### Create dataloader for offline training.
     dataloader = torch.utils.data.DataLoader(
         dataset_pusht,
         num_workers=0,
@@ -121,10 +127,10 @@ if __name__ == "__main__":
         drop_last=True,
     )
 
-    ## Forward the pushT dataset
+    # Forward the pushT dataset
     policy_pusht.train()
     policy_pusht.to(device)    
-    for batch in tqdm.tqdm(dataloader, desc="Training"):            
+    for batch in tqdm.tqdm(dataloader, desc="Training pushT"):            
         batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
         output_dict = policy_pusht.forward(batch)
         loss = output_dict["loss"]
