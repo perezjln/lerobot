@@ -44,12 +44,12 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Set up the dataset.
-    delta_timestamps = {
+    delta_timestamps_koch = {
 
         # Load the previous image and state at -0.1 seconds before current frame,
         # then load current image and state corresponding to 0.0 second.
-        "observation.images.laptop": [-0.1, 0.0],
-        "observation.images.phone": [-0.1, 0.0],
+        "observation.images.elp0": [-0.1, 0.0],
+        "observation.images.elp1": [-0.1, 0.0],
         "observation.state": [-0.1, 0.0],
 
         # Load the previous action (-0.1), the next action to be executed (0.0),
@@ -57,41 +57,53 @@ if __name__ == "__main__":
         # used to supervise the policy.
         "action": [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4],
     }
+    #dataset_koch = LeRobotDataset("jackvial/koch_pick_and_place_pistachio_11_e20", delta_timestamps=delta_timestamps_koch)
+    #print(dataset_koch.hf_dataset.features.keys())
+    dataset = MultiLeRobotDataset(["jackvial/koch_pick_and_place_pistachio_11_e20", 
+                                        "jackvial/koch_pick_and_place_pistachio_10_e20", 
+                                        "jackvial/koch_pick_and_place_pistachio_8_e100", 
+                                        "jackvial/koch_pick_and_place_pistachio_5_e3"], 
+                                        delta_timestamps=delta_timestamps_koch)
 
+    """
     if args.dataset_name is not None:
         dataset = LeRobotDataset(args.dataset_name, delta_timestamps=delta_timestamps)
     else:
         with open(args.dataset_list, "r") as f:
             dataset_names = f.read().splitlines()
         dataset = MultiLeRobotDataset(dataset_names, delta_timestamps=delta_timestamps)
-
     print(dataset.info)
-
+    """
+    
     # Set up the the policy.
     # Policies are initialized with a configuration class, in this case `DiffusionConfig`.
     # For this example, no arguments need to be passed because the defaults are set up for PushT.
     # If you're doing something different, you will likely need to change at least some of the defaults.
 
-    input_shapes={"observation.images.laptop": dataset[0]["observation.images.laptop"].shape,
-                  "observation.images.phone": dataset[0]["observation.images.phone"].shape,
-                  "observation.state": dataset[0]["observation.state"].shape}
-
-    output_shapes={"action":dataset[0]["action"].shape}
-
     if args.policy_type == "act":
 
-        cfg = ACTConfig(input_shapes=input_shapes,
-                        output_shapes=output_shapes,                        
-                        input_normalization_modes={},
-                        output_normalization_modes={})
+        cfg = ACTConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
+                                                          "observation.images.elp1": "mean_std",
+                                                          "observation.state": "mean_std"},
+                               output_normalization_modes={"action": "mean_std"},
+                               crop_shape=None,
+                               input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
+                                             "observation.images.elp1": dataset[0]["observation.images.elp1"].shape[1:],
+                                             "observation.state": dataset[0]["observation.state"].shape[1:]},
+                                output_shapes={"action": dataset[0]["action"].shape[1:]})
         policy = ACTPolicy(cfg, dataset_stats=dataset.stats)
 
     else:
 
-        cfg = DiffusionConfig(input_shapes=input_shapes,
-                                output_shapes=output_shapes,                        
-                                input_normalization_modes={},
-                                output_normalization_modes={})
+        cfg = DiffusionConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
+                                                          "observation.images.elp1": "mean_std",
+                                                          "observation.state": "mean_std"},
+                               output_normalization_modes={"action": "mean_std"},
+                               crop_shape=None,
+                               input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
+                                             "observation.images.elp1": dataset[0]["observation.images.elp1"].shape[1:],
+                                             "observation.state": dataset[0]["observation.state"].shape[1:]},
+                                output_shapes={"action": dataset[0]["action"].shape[1:]})
         policy = DiffusionPolicy(cfg, dataset_stats=dataset.stats)
         
     policy.train()
@@ -103,7 +115,7 @@ if __name__ == "__main__":
     dataloader = torch.utils.data.DataLoader(
         dataset,
         num_workers=0,
-        batch_size=64,
+        batch_size=8,
         shuffle=True,
         pin_memory=device != torch.device("cpu"),
         drop_last=True,
