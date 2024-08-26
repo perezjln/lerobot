@@ -63,8 +63,7 @@ if __name__ == "__main__":
     #print(dataset_koch.hf_dataset.features.keys())
     dataset = MultiLeRobotDataset(["jackvial/koch_pick_and_place_pistachio_11_e20", 
                                     "jackvial/koch_pick_and_place_pistachio_10_e20", 
-                                    "jackvial/koch_pick_and_place_pistachio_8_e100", 
-                                    "jackvial/koch_pick_and_place_pistachio_5_e3"], 
+                                    "jackvial/koch_pick_and_place_pistachio_8_e100"], 
                                     delta_timestamps=delta_timestamps_koch)
 
     """
@@ -85,8 +84,8 @@ if __name__ == "__main__":
     if args.policy_type == "act":
 
         cfg = ACTConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
-                                                          "observation.images.elp1": "mean_std",
-                                                          "observation.state": "mean_std"},
+                                                    "observation.images.elp1": "mean_std",
+                                                    "observation.state": "mean_std"},
                                output_normalization_modes={"action": "mean_std"},
                                input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
                                              "observation.images.elp1": dataset[0]["observation.images.elp1"].shape[1:],
