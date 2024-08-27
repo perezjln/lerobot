@@ -46,6 +46,8 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Set up the dataset.
+    fps = 15
+    act_chunk_size = 128
     delta_timestamps_koch = {
 
         # Load the previous image and state at -0.1 seconds before current frame,
@@ -57,7 +59,7 @@ if __name__ == "__main__":
         # Load the previous action (-0.1), the next action to be executed (0.0),
         # and 14 future actions with a 0.1 seconds spacing. All these actions will be
         # used to supervise the policy.
-        "action": [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4],
+        "action": [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4] if args.policy_type == "diffusion" else [i / fps for i in range(act_chunk_size)]
     }
     #dataset_koch = LeRobotDataset("jackvial/koch_pick_and_place_pistachio_11_e20", delta_timestamps=delta_timestamps_koch)
     #print(dataset_koch.hf_dataset.features.keys())
@@ -87,7 +89,7 @@ if __name__ == "__main__":
                                                     "observation.images.elp1": "mean_std",
                                                     "observation.state": "mean_std"},
                                 output_normalization_modes={"action": "mean_std"},
-                                #crop_shape=None,
+                                chunk_size=act_chunk_size,
                                 input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
                                                 "observation.images.elp1": dataset[0]["observation.images.elp1"].shape[1:],
                                                 "observation.state": dataset[0]["observation.state"].shape[1:]},
