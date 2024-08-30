@@ -8,14 +8,13 @@ from pathlib import Path
 
 import argparse
 import torch
+import tqdm
 
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset, MultiLeRobotDataset
 from lerobot.common.policies.diffusion.configuration_diffusion import DiffusionConfig
 from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
 from lerobot.common.policies.act.modeling_act import ACTPolicy
 from lerobot.common.policies.act.configuration_act import ACTConfig
-
-import tqdm
 
 
 if __name__ == "__main__":
@@ -31,6 +30,8 @@ if __name__ == "__main__":
                         help="Path to the file containing the list of datasets")
     parser.add_argument("--dataset_name", type=str, default=None,
                         help="Name of the dataset if it is unique")
+    parser.add_argument("--act_chunk_size", type=int, default=100, help="Number of actions to chunk for ACT policy")
+    parser.add_argument("--act_use_vae", action="store_true", help="Use VAE for ACT policy")
     parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="act",
                         help="Type of policy to train: diffusion or act")
     args = parser.parse_args()
@@ -38,19 +39,13 @@ if __name__ == "__main__":
     output_directory = Path(args.output_dir)
     output_directory.mkdir(parents=True, exist_ok=True)
 
-    training_steps = args.steps
-    log_freq = args.log_freq
-
     # Rest of the code...
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print(f"Using device: {device}")
 
     # Set up the dataset.
-    fps = 15
-    act_chunk_size = 100
-
     if args.policy_type == "diffusion":
-        delta_timestamps_koch = {
+        delta_timestamps = {
 
             # Load the previous image and state at -0.1 seconds before current frame,
             # then load current image and state corresponding to 0.0 second.
@@ -64,44 +59,25 @@ if __name__ == "__main__":
             "action": [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4]
         }
 
-        dataset = MultiLeRobotDataset(["jackvial/koch_pick_and_place_pistachio_11_e20", 
-                                        "jackvial/koch_pick_and_place_pistachio_10_e20", 
-                                        "jackvial/koch_pick_and_place_pistachio_8_e100"], 
-                                        delta_timestamps=delta_timestamps_koch)
-
     else:
-        delta_timestamps_koch = {
-
-            # Load the previous image and state at -0.1 seconds before current frame,
-            # then load current image and state corresponding to 0.0 second.
-            "observation.images.elp0": [0.0],
-            "observation.images.elp1": [0.0],
-            "observation.state": [0.0],
-
+        fps = 15
+        delta_timestamps = {
             # Load the previous action (-0.1), the next action to be executed (0.0),
             # and 14 future actions with a 0.1 seconds spacing. All these actions will be
             # used to supervise the policy.
-            "action": [i / fps for i in range(act_chunk_size)]
+            "action": [i / fps for i in range(args.act_chunk_size)]
         }
     
-        dataset = MultiLeRobotDataset(["jackvial/koch_pick_and_place_pistachio_11_e20", 
-                                        "jackvial/koch_pick_and_place_pistachio_10_e20", 
-                                        "jackvial/koch_pick_and_place_pistachio_8_e100"])
-                                      #delta_timestamps=delta_timestamps_koch)
-
-    #dataset_koch = LeRobotDataset("jackvial/koch_pick_and_place_pistachio_11_e20", delta_timestamps=delta_timestamps_koch)
-    #print(dataset_koch.hf_dataset.features.keys())
-
-    """
     if args.dataset_name is not None:
         dataset = LeRobotDataset(args.dataset_name, delta_timestamps=delta_timestamps)
     else:
         with open(args.dataset_list, "r") as f:
             dataset_names = f.read().splitlines()
         dataset = MultiLeRobotDataset(dataset_names, delta_timestamps=delta_timestamps)
+
     print(dataset.info)
-    """
-    
+    print(dataset.hf_dataset.features.keys()) 
+  
     # Set up the the policy.
     # Policies are initialized with a configuration class, in this case `DiffusionConfig`.
     # For this example, no arguments need to be passed because the defaults are set up for PushT.
@@ -113,13 +89,13 @@ if __name__ == "__main__":
                                                     "observation.images.elp1": "mean_std",
                                                     "observation.state": "mean_std"},
                                 output_normalization_modes={"action": "mean_std"},
-                                chunk_size=act_chunk_size,
+                                chunk_size=args.act_chunk_size,
                                 use_vae = False,
                                 n_action_steps=100,
-                                input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape,#[1:],
-                                              "observation.images.elp1": dataset[0]["observation.images.elp1"].shape,#[1:],
-                                              "observation.state": dataset[0]["observation.state"].shape}, #[1:]},
-                                    output_shapes={"action": dataset[0]["action"].shape}) #[1:]})
+                                input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape,
+                                              "observation.images.elp1": dataset[0]["observation.images.elp1"].shape,
+                                              "observation.state": dataset[0]["observation.state"].shape},
+                                    output_shapes={"action": dataset[0]["action"].shape[1:]})
 
         policy = ACTPolicy(cfg, dataset_stats=dataset.stats)
 
@@ -138,7 +114,6 @@ if __name__ == "__main__":
         
     policy.train()
     policy.to(device)
-
     optimizer = torch.optim.Adam(policy.parameters(), lr=1e-4)
 
     # Create dataloader for offline training.
@@ -153,8 +128,8 @@ if __name__ == "__main__":
 
     # Run training loop.
     step = 0
+    done = False    
     grad_clip_norm = 10.0
-    done = False
     while not done:
         for batch in tqdm.tqdm(dataloader, desc="Training", unit="batch"):
             
@@ -172,10 +147,10 @@ if __name__ == "__main__":
             optimizer.step()
             optimizer.zero_grad()
 
-            if step % log_freq == 0:
+            if step % args.log_freq == 0:
                 print(f"step: {step} loss: {loss.item():.3f}")
             step += 1
-            if step >= training_steps:
+            if step >= args.steps:
                 done = True
                 break
 
