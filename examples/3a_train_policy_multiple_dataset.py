@@ -20,20 +20,21 @@ from lerobot.common.policies.act.configuration_act import ACTConfig
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Train Policy on multiple datasets")
-    parser.add_argument("--output_dir", type=str, default="outputs/train",
+    parser.add_argument("--output_dir", type=str, default="outputs-pistachio/train",
                         help="Directory to store the training checkpoint")
     parser.add_argument("--steps", type=int, default=80000,
                         help="Number of offline training steps")
     parser.add_argument("--log_freq", type=int, default=250,
                         help="Frequency of logging training progress")
-    parser.add_argument("--dataset_list", type=str, default="dataset_list_small.txt",
+    parser.add_argument("--dataset_list", type=str, default="examples/dataset_list_pistachio.txt",
                         help="Path to the file containing the list of datasets")
     parser.add_argument("--dataset_name", type=str, default=None,
                         help="Name of the dataset if it is unique")
-    parser.add_argument("--act_chunk_size", type=int, default=100, help="Number of actions to chunk for ACT policy")
-    parser.add_argument("--act_use_vae", action="store_true", help="Use VAE for ACT policy")
     parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="act",
                         help="Type of policy to train: diffusion or act")
+    parser.add_argument("--act_chunk_size", type=int, default=100, help="Number of actions to chunk for ACT policy")
+    parser.add_argument("--act_n_action_steps", type=int, default=100, help="Number of action steps for ACT policy")
+    parser.add_argument("--act_use_vae", action="store_true", help="Use VAE for ACT policy")
     args = parser.parse_args()
 
     output_directory = Path(args.output_dir)
@@ -74,9 +75,7 @@ if __name__ == "__main__":
         with open(args.dataset_list, "r") as f:
             dataset_names = f.read().splitlines()
         dataset = MultiLeRobotDataset(dataset_names, delta_timestamps=delta_timestamps)
-
-    print(dataset.info)
-    print(dataset.hf_dataset.features.keys()) 
+    print(dataset.features.keys()) 
   
     # Set up the the policy.
     # Policies are initialized with a configuration class, in this case `DiffusionConfig`.
@@ -90,8 +89,8 @@ if __name__ == "__main__":
                                                     "observation.state": "mean_std"},
                                 output_normalization_modes={"action": "mean_std"},
                                 chunk_size=args.act_chunk_size,
-                                use_vae = False,
-                                n_action_steps=100,
+                                use_vae = args.act_use_vae,
+                                n_action_steps=args.act_n_action_steps,
                                 input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape,
                                               "observation.images.elp1": dataset[0]["observation.images.elp1"].shape,
                                               "observation.state": dataset[0]["observation.state"].shape},
