@@ -15,7 +15,6 @@ from lerobot.common.policies.diffusion.configuration_diffusion import DiffusionC
 from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
 from lerobot.common.policies.act.modeling_act import ACTPolicy
 from lerobot.common.policies.act.configuration_act import ACTConfig
-
 from lerobot.common.policies.vqbet.configuration_vqbet import VQBeTConfig
 from lerobot.common.policies.vqbet.modeling_vqbet import VQBeTPolicy
 
@@ -24,21 +23,19 @@ from lerobot.common.policies.vqbet.modeling_vqbet import VQBeTPolicy
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Train Policy on multiple datasets")
-    parser.add_argument("--output_dir", type=str, default="outputs-pistachio-vqbet/train",
-                        help="Directory to store the training checkpoint")
-    parser.add_argument("--steps", type=int, default=80000,
-                        help="Number of offline training steps")
-    parser.add_argument("--log_freq", type=int, default=250,
-                        help="Frequency of logging training progress")
-    parser.add_argument("--dataset_list", type=str, default="examples/dataset_list_pistachio.txt",
-                        help="Path to the file containing the list of datasets")
-    parser.add_argument("--dataset_name", type=str, default=None,
-                        help="Name of the dataset if it is unique")
-    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act", "vqbet"], default="vqbet",
-                        help="Type of policy to train: diffusion or act")
+    parser.add_argument("--output_dir", type=str, default="outputs-pistachio-vqbet/train", help="Directory to store the training checkpoint")
+    parser.add_argument("--steps", type=int, default=80000, help="Number of offline training steps")
+    parser.add_argument("--log_freq", type=int, default=250, help="Frequency of logging training progress")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training")
+    parser.add_argument("--dataset_list", type=str, default="examples/dataset_list_pistachio.txt", help="Path to the file containing the list of datasets")
+    parser.add_argument("--dataset_name", type=str, default=None, help="Name of the dataset if it is unique")
+    parser.add_argument("--fps", type=int, default=15, help="Frame per second of the dataset")
+    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act", "vqbet"], default="vqbet", help="Type of policy to train: diffusion or act")
     parser.add_argument("--act_chunk_size", type=int, default=100, help="Number of actions to chunk for ACT policy")
     parser.add_argument("--act_n_action_steps", type=int, default=100, help="Number of action steps for ACT policy")
     parser.add_argument("--act_use_vae", action="store_true", help="Use VAE for ACT policy")
+    parser.add_argument("--vqbet_action_pred_token", type=int, default=7, help="Number of action prediction tokens for VQBeT policy")
+
     args = parser.parse_args()
 
     output_directory = Path(args.output_dir)
@@ -65,22 +62,18 @@ if __name__ == "__main__":
         }
 
     elif args.policy_type == "act":
-        fps = 15
         delta_timestamps = {
             # Load the previous action (-0.1), the next action to be executed (0.0),
             # and 14 future actions with a 0.1 seconds spacing. All these actions will be
             # used to supervise the policy.
-            "action": [i / fps for i in range(args.act_chunk_size)]
+            "action": [i / args.fps for i in range(args.act_chunk_size)]
         }
     else:
-        fps = 15
         n_obs_steps= 5
-        n_action_pred_token= 7
-        action_chunk_size= 5
         delta_timestamps= {
-            "observation.images.elp0": [i / fps for i in range(1 - n_obs_steps, 1)],
-            "observation.state": [i / fps for i in range(1 - n_obs_steps, 1)],
-            "action": [i / fps for i in range(1 - n_obs_steps, n_action_pred_token + args.act_chunk_size - 1)]
+            "observation.images.elp0": [i / args.fps for i in range(1 - n_obs_steps, 1)],
+            "observation.state": [i / args.fps for i in range(1 - n_obs_steps, 1)],
+            "action": [i / args.fps for i in range(1 - n_obs_steps, args.vqbet_action_pred_token + args.act_chunk_size - 1)]
         }
     
     if args.dataset_name is not None:
@@ -130,13 +123,12 @@ if __name__ == "__main__":
                                                     "observation.state": "mean_std"},
                                 output_normalization_modes={"action": "min_max"},
                                 n_obs_steps=5,
-                                n_action_pred_token=7,
+                                n_action_pred_token=args.vqbet_action_pred_token,
                                 action_chunk_size=5,
                                 input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
                                               "observation.state": dataset[0]["observation.state"].shape[1:]},
                                 output_shapes={"action": dataset[0]["action"].shape[1:]})
         policy = VQBeTPolicy(cfg, dataset_stats=dataset.stats)    
-    
     
     policy.train()
     policy.to(device)
@@ -145,7 +137,7 @@ if __name__ == "__main__":
     # Create dataloader for offline training.
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        num_workers=0,
+        num_workers=4,
         batch_size=8,
         shuffle=True,
         pin_memory=device != torch.device("cpu"),
