@@ -16,11 +16,15 @@ from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
 from lerobot.common.policies.act.modeling_act import ACTPolicy
 from lerobot.common.policies.act.configuration_act import ACTConfig
 
+from lerobot.common.policies.vqbet.configuration_vqbet import VQBeTConfig
+from lerobot.common.policies.vqbet.modeling_vqbet import VQBeTPolicy
+
+
 
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Train Policy on multiple datasets")
-    parser.add_argument("--output_dir", type=str, default="outputs-pistachio/train",
+    parser.add_argument("--output_dir", type=str, default="outputs-pistachio-vqbet/train",
                         help="Directory to store the training checkpoint")
     parser.add_argument("--steps", type=int, default=80000,
                         help="Number of offline training steps")
@@ -30,7 +34,7 @@ if __name__ == "__main__":
                         help="Path to the file containing the list of datasets")
     parser.add_argument("--dataset_name", type=str, default=None,
                         help="Name of the dataset if it is unique")
-    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act"], default="act",
+    parser.add_argument("--policy_type", type=str, choices=["diffusion", "act", "vqbet"], default="vqbet",
                         help="Type of policy to train: diffusion or act")
     parser.add_argument("--act_chunk_size", type=int, default=100, help="Number of actions to chunk for ACT policy")
     parser.add_argument("--act_n_action_steps", type=int, default=100, help="Number of action steps for ACT policy")
@@ -60,13 +64,23 @@ if __name__ == "__main__":
             "action": [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4]
         }
 
-    else:
+    elif args.policy_type == "act":
         fps = 15
         delta_timestamps = {
             # Load the previous action (-0.1), the next action to be executed (0.0),
             # and 14 future actions with a 0.1 seconds spacing. All these actions will be
             # used to supervise the policy.
             "action": [i / fps for i in range(args.act_chunk_size)]
+        }
+    else:
+        fps = 15
+        n_obs_steps= 5
+        n_action_pred_token= 7
+        action_chunk_size= 5
+        delta_timestamps= {
+            "observation.images.elp0": [i / fps for i in range(1 - n_obs_steps, 1)],
+            "observation.state": [i / fps for i in range(1 - n_obs_steps, 1)],
+            "action": [i / fps for i in range(1 - n_obs_steps, n_action_pred_token + args.act_chunk_size - 1)]
         }
     
     if args.dataset_name is not None:
@@ -87,7 +101,7 @@ if __name__ == "__main__":
         cfg = ACTConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
                                                     "observation.images.elp1": "mean_std",
                                                     "observation.state": "mean_std"},
-                                output_normalization_modes={"action": "mean_std"},
+                                output_normalization_modes={"action": "min_max"},
                                 chunk_size=args.act_chunk_size,
                                 use_vae = args.act_use_vae,
                                 n_action_steps=args.act_n_action_steps,
@@ -98,12 +112,12 @@ if __name__ == "__main__":
 
         policy = ACTPolicy(cfg, dataset_stats=dataset.stats)
 
-    else:
+    elif args.policy_type == "diffusion":
 
         cfg = DiffusionConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
                                                           "observation.images.elp1": "mean_std",
                                                           "observation.state": "mean_std"},
-                               output_normalization_modes={"action": "mean_std"},
+                               output_normalization_modes={"action": "min_max"},
                                crop_shape=None,
                                input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
                                              "observation.images.elp1": dataset[0]["observation.images.elp1"].shape[1:],
@@ -111,6 +125,19 @@ if __name__ == "__main__":
                                 output_shapes={"action": dataset[0]["action"].shape[1:]})
         policy = DiffusionPolicy(cfg, dataset_stats=dataset.stats)
         
+    else:
+        cfg = VQBeTConfig(input_normalization_modes={"observation.images.elp0": "mean_std",
+                                                    "observation.state": "mean_std"},
+                                output_normalization_modes={"action": "min_max"},
+                                n_obs_steps=5,
+                                n_action_pred_token=7,
+                                action_chunk_size=5,
+                                input_shapes={"observation.images.elp0": dataset[0]["observation.images.elp0"].shape[1:],
+                                              "observation.state": dataset[0]["observation.state"].shape[1:]},
+                                output_shapes={"action": dataset[0]["action"].shape[1:]})
+        policy = VQBeTPolicy(cfg, dataset_stats=dataset.stats)    
+    
+    
     policy.train()
     policy.to(device)
     optimizer = torch.optim.Adam(policy.parameters(), lr=1e-4)
