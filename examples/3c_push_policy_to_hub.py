@@ -30,6 +30,9 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Policy type {args.policy_type} not supported")        
     
-    print("Pushing model to the hub...")
-    model.push_to_hub(args.repo_id)
+    print("Model config: ")
+    print(model.config)
+    
+    print("\nPushing model to the hub...")
+    model.push_to_hub(args.repo_id, config=model.config)
     print("Done !")
